@@ -36,6 +36,12 @@ func newCommentLoopChannel(ctx context.Context, apprv *approvalEnvironment, clie
 	counter := 0
 	go func() {
 		for {
+			if counter == 30 {
+				fmt.Printf("timeout\n")
+				channel <- 1
+				close(channel)
+			}
+
 			comments, _, err := client.Issues.ListComments(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueListCommentsOptions{})
 			if err != nil {
 				fmt.Printf("error getting comments: %v\n", err)
@@ -92,11 +98,6 @@ func newCommentLoopChannel(ctx context.Context, apprv *approvalEnvironment, clie
 				close(channel)
 			}
 
-			if counter == 30 {
-				fmt.Printf("timeout\n")
-				channel <- 1
-				close(channel)
-			}
 			counter += 1
 
 			time.Sleep(pollingInterval)
