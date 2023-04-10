@@ -36,28 +36,42 @@ func newCommentLoopChannel(ctx context.Context, apprv *approvalEnvironment, clie
 	counter := 0
 	go func() {
 		for {
-			var approved approvalStatus
 			if counter == 30 {
-				approved = approvalStatusDenied
-				fmt.Printf("timeout\n")
+				fmt.Printf("Timeout\n")
+				newState := "closed"
+				closeComment := "Request denied. Closing issue and failing workflow."
+				_, _, err := client.Issues.CreateComment(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueComment{
+					Body: &closeComment,
+				})
+				if err != nil {
+					fmt.Printf("error commenting on issue: %v\n", err)
+					channel <- 1
+					close(channel)
+				}
+				_, _, err = client.Issues.Edit(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueRequest{State: &newState})
+				if err != nil {
+					fmt.Printf("error closing issue: %v\n", err)
+					channel <- 1
+					close(channel)
+				}
 				channel <- 1
 				close(channel)
-			} else {
-				comments, _, err := client.Issues.ListComments(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueListCommentsOptions{})
-				if err != nil {
-					fmt.Printf("error getting comments: %v\n", err)
-					channel <- 1
-					close(channel)
-				}
-
-				approved, err := approvalFromComments(comments, apprv.issueApprovers, apprv.minimumApprovals)
-				if err != nil {
-					fmt.Printf("error getting approval from comments: %v\n", err)
-					channel <- 1
-					close(channel)
-				}
-				fmt.Printf("Workflow status: %s\n", approved)
+				return
 			}
+			comments, _, err := client.Issues.ListComments(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueListCommentsOptions{})
+			if err != nil {
+				fmt.Printf("error getting comments: %v\n", err)
+				channel <- 1
+				close(channel)
+			}
+
+			approved, err := approvalFromComments(comments, apprv.issueApprovers, apprv.minimumApprovals)
+			if err != nil {
+				fmt.Printf("error getting approval from comments: %v\n", err)
+				channel <- 1
+				close(channel)
+			}
+			fmt.Printf("Workflow status: %s\n", approved)
 			switch approved {
 			case approvalStatusApproved:
 				newState := "closed"
