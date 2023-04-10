@@ -36,26 +36,28 @@ func newCommentLoopChannel(ctx context.Context, apprv *approvalEnvironment, clie
 	counter := 0
 	go func() {
 		for {
+			var approved approvalStatus
 			if counter == 30 {
+				approved = approvalStatusDenied
 				fmt.Printf("timeout\n")
 				channel <- 1
 				close(channel)
-			}
+			} else {
+				comments, _, err := client.Issues.ListComments(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueListCommentsOptions{})
+				if err != nil {
+					fmt.Printf("error getting comments: %v\n", err)
+					channel <- 1
+					close(channel)
+				}
 
-			comments, _, err := client.Issues.ListComments(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueListCommentsOptions{})
-			if err != nil {
-				fmt.Printf("error getting comments: %v\n", err)
-				channel <- 1
-				close(channel)
+				approved, err := approvalFromComments(comments, apprv.issueApprovers, apprv.minimumApprovals)
+				if err != nil {
+					fmt.Printf("error getting approval from comments: %v\n", err)
+					channel <- 1
+					close(channel)
+				}
+				fmt.Printf("Workflow status: %s\n", approved)
 			}
-
-			approved, err := approvalFromComments(comments, apprv.issueApprovers, apprv.minimumApprovals)
-			if err != nil {
-				fmt.Printf("error getting approval from comments: %v\n", err)
-				channel <- 1
-				close(channel)
-			}
-			fmt.Printf("Workflow status: %s\n", approved)
 			switch approved {
 			case approvalStatusApproved:
 				newState := "closed"
