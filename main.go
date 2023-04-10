@@ -33,6 +33,7 @@ func handleInterrupt(ctx context.Context, client *github.Client, apprv *approval
 
 func newCommentLoopChannel(ctx context.Context, apprv *approvalEnvironment, client *github.Client) chan int {
 	channel := make(chan int)
+	counter := 0
 	go func() {
 		for {
 			comments, _, err := client.Issues.ListComments(ctx, apprv.repoOwner, apprv.repo, apprv.approvalIssueNumber, &github.IssueListCommentsOptions{})
@@ -90,6 +91,13 @@ func newCommentLoopChannel(ctx context.Context, apprv *approvalEnvironment, clie
 				channel <- 1
 				close(channel)
 			}
+
+			if counter == 30 {
+				fmt.Printf("timeout\n")
+				channel <- 1
+				close(channel)
+			}
+			counter += 1
 
 			time.Sleep(pollingInterval)
 		}
